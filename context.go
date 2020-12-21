@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/fsouza/go-dockerclient"
 )
 
 var (
@@ -159,10 +159,13 @@ type Docker struct {
 }
 
 func GetCurrentContainerID() string {
-	file, err := os.Open("/proc/self/cgroup")
+	file, err := os.Open("/proc/1/cpuset")
 
 	if err != nil {
-		return ""
+		file, err = os.Open("/proc/self/cgroup")
+		if err != nil {
+			return ""
+		}
 	}
 
 	reader := bufio.NewReader(file)
@@ -173,9 +176,7 @@ func GetCurrentContainerID() string {
 		_, lines, err := bufio.ScanLines([]byte(scanner.Text()), true)
 		if err == nil {
 			strLines := string(lines)
-			if id := matchDockerCurrentContainerID(strLines); id != "" {
-				return id
-			} else if id := matchECSCurrentContainerID(strLines); id != "" {
+			if id := matchCurrentContainerID(strLines); id != "" {
 				return id
 			}
 		}
@@ -184,8 +185,8 @@ func GetCurrentContainerID() string {
 	return ""
 }
 
-func matchDockerCurrentContainerID(lines string) string {
-	regex := "/docker[/-]([[:alnum:]]{64})(\\.scope)?$"
+func matchCurrentContainerID(lines string) string {
+	regex := "/.+\\/([[:alnum:]]{64})(\\.scope)?$"
 	re := regexp.MustCompilePOSIX(regex)
 
 	if re.MatchString(lines) {
@@ -194,19 +195,5 @@ func matchDockerCurrentContainerID(lines string) string {
 
 		return containerID
 	}
-	return ""
-}
-
-func matchECSCurrentContainerID(lines string) string {
-	regex := "/ecs\\/[^\\/]+\\/(.+)$"
-	re := regexp.MustCompilePOSIX(regex)
-
-	if re.MatchString(string(lines)) {
-		submatches := re.FindStringSubmatch(string(lines))
-		containerID := submatches[1]
-
-		return containerID
-	}
-
 	return ""
 }
